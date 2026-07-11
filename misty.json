@@ -1,0 +1,11 @@
+{
+  "upload_type": "software",
+  "title": "ztools \u2014 zseed (generalized seed engine) + mistyx (misty-doi extensions)",
+  "version": "0.1.0", "language": "eng",
+  "creators": [ { "name": "Choudhary, Abhishek", "affiliation": "AyeAI, Hyderabad, India", "orcid": "0009-0002-0684-8320" } ],
+  "description": "Generalized engine set for the Zistgah ecosystem. zseed: one seed script driven by a per-project seed.json manifest (validate/dry-run by default; gated push+Pages, gated DOI mint with placeholder injection and OpenTimestamps, gated backlog-to-issues). mistyx: misty-doi extensions providing true Zenodo version chaining (actions/newversion under the same concept DOI, with mandatory client-side record verification) and personal-bibliography retrieval (all deposition JSON to BibTeX/Markdown/HTML plus raw records.json audit trail). Verified by execution against a mock Zenodo API including a wrong-record refusal regression test.",
+  "keywords": ["publishing automation","DOI","Zenodo","OpenTimestamps","verification-gated","bibliography","VGC","Zistgah"],
+  "license": "gpl-3.0-or-later", "access_right": "open",
+  "notes": "Copyright (c) 1993-2026 Abhishek Choudhary. All rights reserved except per category. Sole authorship.",
+  "related_identifiers": [ { "relation": "isDerivedFrom", "identifier": "10.5281/zenodo.20719388", "scheme": "doi" } ]
+}

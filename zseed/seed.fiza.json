@@ -1,0 +1,12 @@
+{
+  "name": "fiza",
+  "repo": "zistgah/fiza",
+  "site": "https://zistgah.org/fiza/",
+  "artifact": "index.html",
+  "doi_placeholder": "__FIZA_DOI__",
+  "inject_into": ["index.html", "CONTRACT.md", "CITATION.cff"],
+  "push_files": ["index.html","CONTRACT.md","CONTEXT.md","README.md","BACKLOG.md","LICENSES.md","misty.json","CITATION.cff"],
+  "provenance_dir": "provenance",
+  "backlog": "BACKLOG.md",
+  "pages": true
+}

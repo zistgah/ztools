@@ -1,0 +1,12 @@
+{
+  "name": "ztools",
+  "repo": "zistgah/ztools",
+  "site": "https://github.com/zistgah/ztools",
+  "artifact": "README.md",
+  "doi_placeholder": "__ZTOOLS_DOI__",
+  "inject_into": ["README.md", "CITATION.cff"],
+  "push_files": ["README.md","UPSTREAM.md","misty.json","CITATION.cff","zseed/zseed.sh","zseed/seed.fiza.json","zseed/seed.aab.json","mistyx/mistyx.py","mistyx/mock_zenodo.py"],
+  "provenance_dir": "provenance",
+  "backlog": "UPSTREAM.md",
+  "pages": false
+}
