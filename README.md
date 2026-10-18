@@ -58,3 +58,11 @@ the correct concept, abort path, and the wrong-record refusal.
 See UPSTREAM.md for the PR plan (tracked as aab#9).
 
 Cite: https://doi.org/10.5281/zenodo.21312769 (once minted)
+
+<!-- trademarks:begin -->
+---
+AyeAI®, AyeCNSe® and AyeAM® are registered trademarks of Abhishek Choudhary in India, used and claimed worldwide since
+2019. The names of his products and projects are his trademarks; see [legal/TRADEMARKS.md](legal/TRADEMARKS.md). Code
+licences in this repository grant copyright permissions only and no right in any mark.
+© 1993–2026 Abhishek Choudhary. All rights reserved. AyeAI.
+<!-- trademarks:end -->
