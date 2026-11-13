@@ -19,6 +19,10 @@ copy `zseed.sh` + a manifest named `seed.json` into it. Rules enforced:
 in-folder scratch `./.seedwork` only (never /tmp), tokens from env, typed
 confirmations, logs to `~/work/logs/`, provenance `.ots` always pushed.
 
+See the [zseed and minting manual](docs/seed-and-mint-manual.md) before running
+release or repository-push commands; the manual documents both DOI modes and
+their irreversible-action safeguards.
+
 For a version under an existing Zenodo concept DOI, set
 `"doi_mode": "newversion"` and `"concept_doi": "10.5281/zenodo.<concept-id>"`
 in `seed.json`. The manifest's `mistyx` path defaults to `mistyx/mistyx.py`.
