@@ -79,7 +79,7 @@ the correct concept, abort path, and the wrong-record refusal.
 ## UPSTREAM.md — folding into misty-doi proper
 See UPSTREAM.md for the PR plan (tracked as aab#9).
 
-Cite: https://doi.org/10.5281/zenodo.21312769 (once minted)
+Cite: https://doi.org/__ZTOOLS_DOI__
 
 <!-- trademarks:begin -->
 ---

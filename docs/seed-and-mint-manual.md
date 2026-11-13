@@ -142,9 +142,11 @@ private scratch directory.
 
 Before calling Zenodo to publish, `zseed.sh --publish` stamps a private copy of
 the configured artifact. It refuses to overwrite an existing
-`provenance/<artifact>.ots` proof. It verifies that the proof was created and
-preserved before proceeding to publication; if stamping fails, publication is
-not attempted.
+proof. A first-deposit proof uses `provenance/<artifact>.ots`; a new-version
+proof uses `provenance/<artifact>.<artifact-sha256>.ots`, so a later version
+does not collide with the earlier artifact's sidecar. It verifies that the
+proof was created and preserved before proceeding to publication; if stamping
+fails, publication is not attempted.
 
 An OTS proof commits to the exact artifact bytes. It does not attest every
 file in the Git repository, establish authorship, or prove that the contents

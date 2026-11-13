@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -76,6 +77,10 @@ class ZseedVersionedPublishTests(unittest.TestCase):
         (self.root / ".seedwork" / "sentinel").write_text("keep", encoding="utf-8")
         (self.root / ".doi-dryrun").mkdir()
         (self.root / ".doi-dryrun" / "sentinel").write_text("keep", encoding="utf-8")
+        (self.root / "provenance").mkdir()
+        (self.root / "provenance" / "artifact.tar.gz.ots").write_text(
+            "previous version proof", encoding="utf-8"
+        )
 
     def tearDown(self):
         self.api.shutdown()
@@ -107,8 +112,17 @@ class ZseedVersionedPublishTests(unittest.TestCase):
             mock_zenodo.STATE["published_new"]["conceptdoi"],
             "10.5281/zenodo.21303400",
         )
-        proof = self.root / "provenance" / "artifact.tar.gz.ots"
+        artifact_hash = hashlib.sha256(
+            (self.root / "artifact.tar.gz").read_bytes()
+        ).hexdigest()
+        proof = self.root / "provenance" / f"artifact.tar.gz.{artifact_hash}.ots"
         self.assertEqual(proof.read_text(encoding="utf-8"), "mock OTS proof")
+        self.assertEqual(
+            (self.root / "provenance" / "artifact.tar.gz.ots").read_text(
+                encoding="utf-8"
+            ),
+            "previous version proof",
+        )
         self.assertEqual(
             (self.root / "ZENODO_DOI.txt").read_text(encoding="utf-8").strip(),
             "10.5281/zenodo.21309999",

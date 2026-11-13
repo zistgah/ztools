@@ -4,8 +4,11 @@
   "site": "https://github.com/zistgah/ztools",
   "artifact": "README.md",
   "doi_placeholder": "__ZTOOLS_DOI__",
+  "doi_mode": "newversion",
+  "concept_doi": "10.5281/zenodo.21312768",
+  "mistyx": "mistyx/mistyx.py",
   "inject_into": ["README.md", "CITATION.cff"],
-  "push_files": ["README.md","UPSTREAM.md","misty.json","CITATION.cff","zseed/zseed.sh","zseed/seed.fiza.json","zseed/seed.aab.json","mistyx/mistyx.py","mistyx/mock_zenodo.py"],
+  "push_files": ["README.md","UPSTREAM.md","misty.json","CITATION.cff",".gitattributes","docs/seed-and-mint-manual.md","docs/versioned-zenodo-releases.md","tests/test_mistyx_newversion.py","tests/test_zseed_versioned_publish.py","zseed/zseed.sh","zseed/seed.fiza.json","zseed/seed.aab.json","mistyx/mistyx.py","mistyx/mock_zenodo.py"],
   "provenance_dir": "provenance",
   "backlog": "UPSTREAM.md",
   "pages": false

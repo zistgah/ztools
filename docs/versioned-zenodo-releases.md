@@ -51,6 +51,9 @@ or overwriting scratch data or a user's existing proof.
   is not attempted.
 - Refuses to overwrite an existing proof sidecar. After a successful publish,
   records the returned DOI and injects it into configured placeholders.
+- Names new-version proof sidecars with the artifact SHA-256, so a later
+  release of the same artifact path does not collide with an earlier proof.
+  First-deposit proof names retain the original convention.
 - Replaced shared temporary paths with unique per-run directories under
   `.seedwork`; cleanup is limited to that run's directory. Existing
   `.seedwork` contents and `.doi-dryrun` data are left untouched.

@@ -169,7 +169,11 @@ if [ "$DO_PUBLISH" = "1" ]; then
     [ -n "$MISTY" ] || die "misty not installed"
   fi
   command -v ots >/dev/null 2>&1 || [ -n "$MISTY" ] || die "OpenTimestamps is required before publication"
-  PROOF="$P_PROV/$(basename "$P_ART").ots"
+  if [ "$P_DOI_MODE" = "newversion" ]; then
+    PROOF="$P_PROV/$(basename "$P_ART").$SHA.ots"
+  else
+    PROOF="$P_PROV/$(basename "$P_ART").ots"
+  fi
   [ ! -e "$PROOF" ] || die "refusing to overwrite existing proof: $PROOF"
   echo "  ============================================================"
   echo "   MINT A PERMANENT DOI ON PRODUCTION ZENODO (irreversible)"
