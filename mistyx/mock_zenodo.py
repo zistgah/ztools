@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Mock Zenodo API for testing mistyx locally. Fixtures mirror real records."""
-import json, re, sys
+import json, os, re, sys
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 DEPS = {
@@ -20,7 +20,13 @@ DEPS = {
      "upload_type":"software","publication_date":"2026-04-30","version":"1.0.1",
      "creators":[{"name":"Choudhary, Abhishek","affiliation":"AyeAI, Hyderabad, India"}]}},
 }
-STATE = {"draft": None, "published_new": None, "files": []}
+STATE = {
+    "draft": None,
+    "published_new": None,
+    "files": [],
+    "proof_marker": None,
+    "proof_seen_at_newversion": None,
+}
 
 class H(BaseHTTPRequestHandler):
     def log_message(self,*a): pass
@@ -48,6 +54,8 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         p=self.path.split("?")[0]
         if re.match(r"^/api/deposit/depositions/\d+/actions/newversion$",p):
+            marker=STATE.get("proof_marker")
+            STATE["proof_seen_at_newversion"] = bool(marker and os.path.isfile(marker))
             base=DEPS[int(p.split("/")[4])]
             STATE["draft"]={"id":201,"submitted":False,"conceptdoi":base["conceptdoi"],
               "metadata":dict(base["metadata"]),
