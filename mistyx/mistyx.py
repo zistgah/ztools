@@ -39,6 +39,15 @@ import argparse, json, os, sys, time
 import urllib.request, urllib.parse, urllib.error
 
 API_DEFAULT = "https://zenodo.org/api"
+ZENODO_METADATA_FIELDS = {
+    "upload_type", "publication_date", "title", "creators", "description",
+    "access_right", "license", "embargo_date", "embargo_reason", "doi",
+    "prereserve_doi", "keywords", "notes", "related_identifiers",
+    "contributors", "references", "version", "language", "communities",
+    "subjects", "imprint", "journal", "meeting", "part_of", "thesis",
+    "conference", "book", "report_number", "supervisors", "degree",
+    "locations", "dates", "funding",
+}
 
 # ---------------------------------------------------------------- helpers
 def log(msg): print("  " + msg)
@@ -86,12 +95,96 @@ def concept_id(s):
         if pre in s: s = s.split("zenodo.")[-1]
     return s.split("/")[-1]
 
+def validate_zenodo_metadata(meta):
+    """Map misty.json fields to Zenodo API metadata and validate the result."""
+    if not isinstance(meta, dict):
+        die("metadata must be a JSON object")
+    misty_fields = {"repository", "programming_language"}
+    unknown = sorted(set(meta) - ZENODO_METADATA_FIELDS - misty_fields)
+    if unknown:
+        die("unsupported misty/Zenodo metadata field(s): " + ", ".join(unknown))
+    mapped = {key: value for key, value in meta.items() if key in ZENODO_METADATA_FIELDS}
+    repository = meta.get("repository")
+    if repository is not None:
+        if not isinstance(repository, str) or not repository.startswith(("https://", "http://")):
+            die("misty.json repository must be an HTTP(S) URL")
+        related = mapped.get("related_identifiers", [])
+        if not isinstance(related, list):
+            die("metadata related_identifiers must be a list")
+        related.append({
+            "identifier": repository,
+            "relation": "isSupplementTo",
+            "scheme": "url",
+        })
+        mapped["related_identifiers"] = related
+    languages = meta.get("programming_language", [])
+    if isinstance(languages, str):
+        languages = [languages]
+    if (
+        not isinstance(languages, list)
+        or any(not isinstance(item, str) or not item.strip() for item in languages)
+    ):
+        die("misty.json programming_language must be a string or list of non-empty strings")
+    if languages:
+        keywords = mapped.get("keywords", [])
+        if not isinstance(keywords, list) or any(
+            not isinstance(item, str) or not item.strip() for item in keywords
+        ):
+            die("metadata keywords must be a list of non-empty strings")
+        mapped["keywords"] = list(dict.fromkeys(
+            [*keywords, *languages]
+        ))
+    for key in ("upload_type", "title", "creators", "description", "access_right"):
+        if key not in meta:
+            die(f"metadata missing required Zenodo field: {key}")
+    if mapped["upload_type"] not in {
+        "publication", "poster", "presentation", "dataset", "image",
+        "video", "software", "lesson", "physicalobject", "other",
+    }:
+        die("metadata upload_type is not a supported Zenodo type")
+    for key in ("title", "description"):
+        if not isinstance(mapped[key], str) or not mapped[key].strip():
+            die(f"metadata {key} must be a non-empty string")
+    if mapped["access_right"] not in {"open", "embargoed", "restricted", "closed"}:
+        die("metadata access_right must be open, embargoed, restricted, or closed")
+    if mapped["access_right"] == "open" and (
+        not isinstance(mapped.get("license"), str) or not mapped["license"].strip()
+    ):
+        die("open-access metadata requires a non-empty license identifier")
+    creators = mapped["creators"]
+    if not isinstance(creators, list) or not creators:
+        die("metadata creators must be a non-empty list")
+    for i, creator in enumerate(creators):
+        if not isinstance(creator, dict) or not isinstance(creator.get("name"), str) or not creator["name"].strip():
+            die(f"metadata creators[{i}] must have a non-empty name")
+    if "keywords" in mapped and (
+        not isinstance(mapped["keywords"], list)
+        or any(not isinstance(item, str) or not item.strip() for item in mapped["keywords"])
+    ):
+        die("metadata keywords must be a list of non-empty strings")
+    if "related_identifiers" in mapped:
+        related = mapped["related_identifiers"]
+        if not isinstance(related, list):
+            die("metadata related_identifiers must be a list")
+        for i, item in enumerate(related):
+            if (
+                not isinstance(item, dict)
+                or not isinstance(item.get("identifier"), str)
+                or not item["identifier"].strip()
+                or not isinstance(item.get("relation"), str)
+                or not item["relation"].strip()
+            ):
+                die(f"metadata related_identifiers[{i}] requires identifier and relation strings")
+    if "version" not in mapped or not isinstance(mapped["version"], str) or not mapped["version"].strip():
+        die("versioned releases require a non-empty metadata version")
+    return mapped
+
 # ---------------------------------------------------------------- newversion
 def cmd_newversion(a):
     tok = token()
     z = Zen(a.api_base, tok)
     cid = concept_id(a.concept)
-    meta = json.load(open(a.metadata)) if a.metadata else None
+    meta = validate_zenodo_metadata(json.load(open(a.metadata)))
     blob = open(a.file, "rb").read()
     import hashlib
     sha = hashlib.sha256(blob).hexdigest()
@@ -120,6 +213,9 @@ def cmd_newversion(a):
         die(f"lookup failed [{code}]: {rec}")
     dep_id = rec["id"]
     old_doi = (rec.get("doi") or rec.get("metadata", {}).get("prereserve_doi", {}).get("doi", "?"))
+    old_version = rec.get("metadata", {}).get("version")
+    if str(meta.get("version")) == str(old_version):
+        die(f"metadata version {meta['version']} matches the latest published version; bump it before minting")
     log(f"latest published version: deposition {dep_id} (doi {old_doi})")
 
     if not a.mint:
@@ -160,22 +256,25 @@ def cmd_newversion(a):
     if code not in (200, 201): die(f"upload failed [{code}]: {up}")
     log(f"uploaded {os.path.basename(a.file)}")
 
-    if meta:
-        md = dict(meta)
-        code, r = z.put(f"/deposit/depositions/{did}", {"metadata": md})
-        if code != 200: die(f"metadata update failed [{code}]: {r}")
-        log("metadata updated (version " + str(md.get("version", "?")) + ")")
+    md = dict(meta)
+    code, r = z.put(f"/deposit/depositions/{did}", {"metadata": md})
+    if code != 200: die(f"metadata update failed [{code}]: {r}")
+    log("metadata updated (version " + str(md.get("version", "?")) + ")")
 
     code, pub = z.post(f"/deposit/depositions/{did}/actions/publish")
     if code not in (200, 201, 202): die(f"publish failed [{code}]: {pub}")
-    new_doi = pub.get("doi") or pub.get("metadata", {}).get("doi", "?")
-    concept = pub.get("conceptdoi", "?")
+    new_doi = pub.get("doi") or pub.get("metadata", {}).get("doi")
+    concept = pub.get("conceptdoi") or pub.get("metadata", {}).get("conceptdoi")
+    if not new_doi:
+        die("published version response did not contain a DOI")
+    if not concept or concept_id(concept) != cid:
+        die(f"published version concept DOI {concept or '(missing)'} does not match requested concept {a.concept}")
     log(f"PUBLISHED new version: doi {new_doi}  (concept {concept})")
     json.dump({"tool": "mistyx", "action": "newversion", "doi": new_doi,
                "concept_doi": concept, "deposition_id": pub.get("id"),
                "sha256": sha, "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z")},
-              open("mistyx_result.json", "w"), indent=2)
-    log("wrote mistyx_result.json")
+              open(a.output, "w"), indent=2)
+    log("wrote " + a.output)
     return 0
 
 # ---------------------------------------------------------------- bib
@@ -295,8 +394,9 @@ def main():
 
     nv = sub.add_parser("newversion", help="mint a NEW VERSION of an existing record (same concept DOI)")
     nv.add_argument("--concept", required=True, help="record/concept id or DOI (e.g. 21303400 or 10.5281/zenodo.21303400)")
-    nv.add_argument("-m", "--metadata", help="misty.json with the updated metadata (bump 'version'!)")
+    nv.add_argument("-m", "--metadata", required=True, help="Zenodo API metadata JSON with a bumped 'version'")
     nv.add_argument("-f", "--file", required=True, help="the new artifact")
+    nv.add_argument("--output", default="mistyx_result.json", help="result JSON path")
     nv.add_argument("--mint", action="store_true", help="actually publish (default is dry-run)")
     nv.set_defaults(fn=cmd_newversion)
 

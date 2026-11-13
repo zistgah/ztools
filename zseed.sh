@@ -22,10 +22,11 @@
 #      "pages": true                               // enable GitHub Pages
 #    }
 #
-#  Commands (safe by default — no flags = validate + offline DOI dry-run):
-#    zseed.sh [-m seed.json]                # validate everything, touch nothing
+#  Commands (safe by default — no flags = validate + read-only DOI dry-run;
+#  newversion mode performs an authenticated, read-only Zenodo lookup):
+#    zseed.sh [-m seed.json]                # validate and run read-only DOI dry-run
 #    zseed.sh --push                        # create/push repo (+Pages)  [typed PUSH]
-#    zseed.sh --publish                     # mint DOI, inject, OTS      [typed MINT]
+#    zseed.sh --publish                     # OTS, mint DOI, inject      [typed MINT]
 #    zseed.sh --issues                      # open backlog sprint issues [typed YES]
 #    zseed.sh --all                         # push + publish (each still gated)
 #
@@ -63,19 +64,32 @@ print("P_PH="+q(d.get("doi_placeholder","")))
 print("P_PROV="+q(d.get("provenance_dir","provenance")))
 print("P_BACKLOG="+q(d.get("backlog","BACKLOG.md")))
 print("P_PAGES="+q(1 if d.get("pages",True) else 0))
+print("P_DOI_MODE="+q(d.get("doi_mode","new")))
+print("P_CONCEPT="+q(d.get("concept_doi","")))
+print("P_MISTYX="+q(d.get("mistyx","mistyx/mistyx.py")))
 print("P_INJECT=("+" ".join(q(x) for x in d.get("inject_into",[]))+")")
 print("P_PUSH=("+" ".join(q(x) for x in d.get("push_files",[]))+")")
 PY
 )"
 
-WORK="$SCRIPT_DIR/.seedwork"
 LOGDIR="${HOME}/work/logs"; mkdir -p "$LOGDIR"
-STAMP="$(date +%Y%m%d-%H%M%S)"; LOG="$LOGDIR/zseed-$P_NAME-$STAMP.log"
+STAMP="$(date +%Y%m%d-%H%M%S)"
+LOG="$LOGDIR/zseed-$P_NAME-$STAMP.log"
+WORK="$SCRIPT_DIR/.seedwork/zseed-$STAMP-$$"
+mkdir -p "$SCRIPT_DIR/.seedwork"
+mkdir "$WORK" || { echo "FATAL: could not create private scratch directory: $WORK"; exit 1; }
 st(){ echo "  $*" | tee -a "$LOG"; }
 hd(){ echo "" | tee -a "$LOG"; echo "=== $* ===" | tee -a "$LOG"; }
 die(){ echo "FATAL: $*" | tee -a "$LOG" >&2; exit 1; }
-cleanup(){ rm -rf "$WORK" .doi-dryrun 2>/dev/null || true; }
+cleanup(){ if [ -d "$WORK" ]; then rm -rf -- "$WORK"; fi; }
 trap cleanup EXIT
+
+[ "$P_DOI_MODE" = "new" ] || [ "$P_DOI_MODE" = "newversion" ] || die "doi_mode must be 'new' or 'newversion'"
+if [ "$P_DOI_MODE" = "newversion" ]; then
+  [ -n "$P_CONCEPT" ] || die "concept_doi is required when doi_mode is newversion"
+  [ -f "$P_MISTYX" ] || die "mistyx script missing: $P_MISTYX"
+  [ -f misty.json ] || die "misty.json missing for a versioned DOI release"
+fi
 
 hd "zseed · $P_NAME — $STAMP (push=$DO_PUSH publish=$DO_PUBLISH issues=$DO_ISSUES)"
 st "dir: $SCRIPT_DIR"; st "repo: $P_REPO"; st "log: $LOG"
@@ -101,13 +115,18 @@ SHA="$(sha256sum "$P_ART" | cut -d' ' -f1)"; st "artifact sha256: $SHA"
 if [ -n "$P_PH" ]; then grep -q "$P_PH" "$P_ART" && st "DOI placeholder present ($P_PH)" || st "note: no placeholder in artifact (minted?)"; fi
 
 # ---- 2. tooling + offline dry-run ----
-hd "2. TOOLING + DOI DRY-RUN (offline)"
+hd "2. TOOLING + DOI DRY-RUN (read-only)"
 MISTY=""; command -v misty >/dev/null 2>&1 && MISTY="misty"
 st "misty : ${MISTY:-NOT FOUND (pipx install misty-doi)}"
 command -v gh >/dev/null 2>&1 && st "gh    : $(command -v gh)" || st "gh    : NOT FOUND (needed for --push/--issues)"
-if [ -n "$MISTY" ] && [ -f misty.json ]; then
+if [ "$P_DOI_MODE" = "newversion" ] && [ -f misty.json ]; then
+  [ -n "${ZENODO_TOKEN:-}" ] || die "ZENODO_TOKEN is required to verify a new-version dry-run"
+  MISTYX_API_ARGS=()
+  [ -n "${MISTYX_API_BASE:-}" ] && MISTYX_API_ARGS=(--api-base "$MISTYX_API_BASE")
+  python3 "$P_MISTYX" "${MISTYX_API_ARGS[@]}" newversion --concept "$P_CONCEPT" -m misty.json -f "$P_ART" 2>&1 | tee -a "$LOG"
+elif [ -n "$MISTY" ] && [ -f misty.json ]; then
   "$MISTY" validate -m misty.json 2>&1 | tee -a "$LOG" || st "   (validate flagged — review)"
-  "$MISTY" publish -m misty.json -f "$P_ART" --dry-run --package-dir ".doi-dryrun" 2>&1 | tee -a "$LOG" || st "   (dry-run flagged — review)"
+  "$MISTY" publish -m misty.json -f "$P_ART" --dry-run --package-dir "$WORK/doi-dryrun" 2>&1 | tee -a "$LOG" || st "   (dry-run flagged — review)"
   st "dry-run complete — nothing published"
 fi
 
@@ -119,7 +138,7 @@ if [ "$DO_PUSH" = "1" ]; then
   echo "  Will publish to $P_REPO: ${P_PUSH[*]} + $P_PROV/*.ots + this script + $MANIFEST"
   read -r -p "  Type PUSH to proceed: " C
   if [ "$C" = "PUSH" ]; then
-    rm -rf "$WORK"; mkdir -p "$WORK/repo/$P_PROV"
+    mkdir -p "$WORK/repo/$P_PROV"
     for f in "${P_PUSH[@]}"; do [ -f "$f" ] && { mkdir -p "$WORK/repo/$(dirname "$f")"; cp -f "$f" "$WORK/repo/$f"; }; done
     cp -f "$P_PROV"/*.ots "$WORK/repo/$P_PROV/" 2>/dev/null || true
     touch "$WORK/repo/$P_PROV/.gitkeep"
@@ -139,21 +158,54 @@ if [ "$DO_PUSH" = "1" ]; then
   else st "push skipped"; fi
 fi
 
-# ---- 4. publish DOI + inject + OTS ----
+# ---- 4. publish DOI + OTS + inject ----
 if [ "$DO_PUBLISH" = "1" ]; then
   hd "4. MINT DOI (irreversible)"
-  [ -n "$MISTY" ] || die "misty not installed"
   [ -f misty.json ] || die "misty.json missing"
   [ -n "${ZENODO_TOKEN:-}" ] || die "ZENODO_TOKEN not set in env"
+  if [ "$P_DOI_MODE" = "newversion" ]; then
+    [ -f "$P_MISTYX" ] || die "mistyx script missing: $P_MISTYX"
+  else
+    [ -n "$MISTY" ] || die "misty not installed"
+  fi
+  command -v ots >/dev/null 2>&1 || [ -n "$MISTY" ] || die "OpenTimestamps is required before publication"
+  PROOF="$P_PROV/$(basename "$P_ART").ots"
+  [ ! -e "$PROOF" ] || die "refusing to overwrite existing proof: $PROOF"
   echo "  ============================================================"
   echo "   MINT A PERMANENT DOI ON PRODUCTION ZENODO (irreversible)"
   echo "   Project: $P_NAME   Artifact: $P_ART   SHA-256: $SHA"
+  [ "$P_DOI_MODE" = "newversion" ] && echo "   Existing concept: $P_CONCEPT"
   echo "  ============================================================"
   read -r -p "  Type MINT to proceed: " C
   [ "$C" = "MINT" ] || { st "mint aborted"; exit 0; }
-  "$MISTY" publish -m misty.json -f "$P_ART" --package-dir ".doi-package" --output "misty_result.json" 2>&1 | tee -a "$LOG"
-  DOI="$(python3 -c "import json;print(json.load(open('misty_result.json'))['doi'])" 2>/dev/null || true)"
-  [ -n "$DOI" ] || die "could not read DOI from misty_result.json"
+
+  # Stamp a private working copy so this never overwrites a user-owned sidecar.
+  mkdir -p "$WORK"
+  cp -- "$P_ART" "$WORK/artifact"
+  if command -v ots >/dev/null 2>&1; then
+    ots stamp "$WORK/artifact" 2>&1 | tee -a "$LOG" || die "OpenTimestamps failed; publication not attempted"
+  elif [ -n "$MISTY" ]; then
+    "$MISTY" ots stamp "$WORK/artifact" 2>&1 | tee -a "$LOG" || die "OpenTimestamps failed; publication not attempted"
+  else
+    die "OpenTimestamps is required before publication"
+  fi
+  [ -s "$WORK/artifact.ots" ] || die "OpenTimestamps did not produce a proof; publication not attempted"
+  mv -- "$WORK/artifact.ots" "$PROOF"
+  [ -s "$PROOF" ] || die "OpenTimestamps proof was not preserved; publication not attempted"
+  st "OTS proof preserved before publication: $PROOF"
+
+  if [ "$P_DOI_MODE" = "newversion" ]; then
+    MISTYX_API_ARGS=()
+    [ -n "${MISTYX_API_BASE:-}" ] && MISTYX_API_ARGS=(--api-base "$MISTYX_API_BASE")
+    # The parent's typed confirmation is relayed only after the user entered MINT.
+    printf 'MINT\n' | python3 "$P_MISTYX" "${MISTYX_API_ARGS[@]}" newversion --concept "$P_CONCEPT" -m misty.json -f "$P_ART" --mint --output "$WORK/mistyx_result.json" 2>&1 | tee -a "$LOG"
+    RESULT="$WORK/mistyx_result.json"
+  else
+    "$MISTY" publish -m misty.json -f "$P_ART" --package-dir "$WORK/doi-package" --output "$WORK/misty_result.json" 2>&1 | tee -a "$LOG"
+    RESULT="$WORK/misty_result.json"
+  fi
+  DOI="$(python3 -c "import json;print(json.load(open('$RESULT'))['doi'])" 2>/dev/null || true)"
+  [ -n "$DOI" ] || die "could not read DOI from $RESULT"
   st "DOI MINTED: $DOI"; echo "$DOI" > ZENODO_DOI.txt
   if [ -n "$P_PH" ]; then
     for f in "${P_INJECT[@]}"; do
@@ -163,9 +215,7 @@ PY
     done
   fi
   hd "5. OPENTIMESTAMPS"
-  if "$MISTY" ots stamp "$P_ART" 2>>"$LOG"; then [ -f "$P_ART.ots" ] && mv -f "$P_ART.ots" "$P_PROV/"; st "ots: $P_PROV/$P_ART.ots"
-  elif command -v ots >/dev/null 2>&1; then ots stamp "$P_ART" && mv -f "$P_ART.ots" "$P_PROV/" 2>/dev/null; st "ots: $P_PROV/$P_ART.ots"
-  else st "OTS skipped (install misty-doi[ots])"; fi
+  st "proof stamped before publication; Bitcoin calendar confirmation may still be pending"
   st "REMINDER: re-run --push to publish the DOI-injected artifact + $P_PROV/*.ots"
 fi
 
